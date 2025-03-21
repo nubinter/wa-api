@@ -1,0 +1,14 @@
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+
+# Database & Auth State (jika ada)
+whatsapp_auth_state/
+whatsapp_sessions/
+
+# Log files
+logs/
+*.log
