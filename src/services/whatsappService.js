@@ -41,6 +41,11 @@ const createWhatsAppClient = async (deviceId) => {
 				await removeCreds(); // Implementasikan fungsi ini di `dbAuthState.js`
 				delete sessions[deviceId];
 				await logoutDevice(deviceId);
+			} else if (lastDisconnect?.error?.output?.statusCode === 428) {
+				console.log('Connection closed. Restart Connection.');
+				setTimeout(async () => {
+					await createWhatsAppClient(deviceId);
+				}, 5000);
 			}
 		}
 
