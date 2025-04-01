@@ -4,8 +4,8 @@ const { initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
 // Konfigurasi koneksi database
 const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
+    user: process.env.DB_USER || 'rulli_sakti',
+    password: process.env.DB_PASSWORD || '$@kT1@)@!',
     database: process.env.DB_NAME || 'whatsapp_api',
 };
 

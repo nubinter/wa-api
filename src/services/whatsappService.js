@@ -46,6 +46,11 @@ const createWhatsAppClient = async (deviceId) => {
 				setTimeout(async () => {
 					await createWhatsAppClient(deviceId);
 				}, 5000);
+			} else if (lastDisconnect?.error?.output?.statusCode === 428) {
+				console.log('Connection closed. Restart Connection.');
+				setTimeout(async () => {
+					await createWhatsAppClient(deviceId);
+				}, 5000);
 			}
 		}
 
@@ -113,6 +118,10 @@ const send_wa = async (deviceId, phoneNumber, message) => {
 		await client.sendMessage(formattedPhoneNumber, { text: message });
 	} catch (error) {
 		console.log('Gagal mengirim pesan:', error);
+		if (error.output.statusCode === 401 || error.output.statusCode === 428) {
+			console.log('Connection closed. Reconnecting...');
+			await createWhatsAppClient(deviceId);
+		}
 		throw error;
 	}
 };
