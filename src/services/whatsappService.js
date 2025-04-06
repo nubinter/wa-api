@@ -102,6 +102,7 @@ const send_wa = async (deviceId, phoneNumber, message) => {
 
 	if (!client.user) {
 		console.log(`Menunggu koneksi untuk ${deviceId}...`);
+		await createWhatsAppClient(deviceId);
 		await new Promise((resolve, reject) => {
 			client.ev.on('connection.update', (update) => {
 				if (update.connection === 'open') resolve();
