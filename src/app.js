@@ -97,7 +97,7 @@ app.get('/my-profile-picture', async (req, res) => {
   }
 
   try {
-    const profilePictureUrl = await getMyProfilePicture();
+    const profilePictureUrl = await getMyProfilePicture(deviceId);
     res.status(200).json({ success: true, picture_url: profilePictureUrl });
   } catch (error) {
     res.status(500).json({ success: false, pesan: error.message });

@@ -154,7 +154,8 @@ const sendImage = async (deviceId, phoneNumber, imageBuffer, caption = '') => {
 	}
 };
 
-const getMyProfilePicture = async (retries = 3, deviceId) => {
+const getMyProfilePicture = async (deviceId, retries = 3) => {
+	console.log(`Mengambil foto profil untuk ${deviceId}...`);
 	if (!sessions[deviceId]?.client) {
 		console.log('Client belum diinisiasi, mencoba menghubungkan...');
 		await createWhatsAppClient(deviceId);
