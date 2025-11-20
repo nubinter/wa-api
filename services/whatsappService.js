@@ -13,7 +13,7 @@ export async function createWhatsAppClient(deviceId) {
 	const client = makeWASocket({
 		version,
 		auth: state,
-		browser: Browsers.macOS('Desktop'),
+		browser: Browsers.windows('Desktop'),
 	});
 
 	sessions[deviceId] = { client, qrCode: null, qrResolver: null };
