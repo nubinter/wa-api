@@ -5,7 +5,7 @@ import 'dotenv/config'
 const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'rulli_sakti',
-    password: process.env.DB_PASSWORD || '$@kT1@)@!',
+    password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'whatsapp_api',
 };
 
