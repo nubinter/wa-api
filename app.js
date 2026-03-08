@@ -7,6 +7,7 @@ import {
   getConnectionStatus,
   generateQRCode,
   send_wa,
+  sendDocumentFromUrl,
   sendImage,
   getMyProfilePicture,
   logoutDevice
@@ -68,6 +69,50 @@ app.post('/send-message', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, pesan: error.message });
   }
+});
+
+/**
+ * Endpoint POST untuk mengirim dokumen dari URL.
+ * Route: /send-document-url
+ */
+app.post('/send-document-url', async (req, res) => {
+	console.log('Request Body:', req.body);
+	
+	// Mendestrukturisasi data yang dibutuhkan dari body request
+	// tinyhttp akan menyediakan req.body setelah middleware json() dipanggil
+	const { 
+		deviceId, 
+		phoneNumber, 
+		fileUrl,      
+		fileName,     
+		caption = '', 
+		mimetype = '' 
+	} = req.body;
+
+	// Validasi input wajib
+	if (!deviceId || !phoneNumber || !fileUrl || !fileName) {
+		return res.status(400).json({ 
+			success: false, 
+			pesan: 'deviceId, phoneNumber, fileUrl, and fileName are required' 
+		});
+	}
+
+	try {
+		// Panggil fungsi Baileys Anda
+		await sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileName, caption, mimetype);
+		
+		// Menggunakan res.json() untuk mengirim respons JSON
+		res.status(200).json({ 
+			success: true, 
+			pesan: `Dokumen "${fileName}" berhasil dikirim ke ${phoneNumber}` 
+		});
+	} catch (error) {
+		console.error('Error saat mengirim dokumen:', error);
+		res.status(500).json({ 
+			success: false, 
+			pesan: `Gagal mengirim dokumen: ${error.message}` 
+		});
+	}
 });
 
 app.post('/send-image', async (req, res) => {

@@ -1,4 +1,4 @@
-import { makeWASocket, DisconnectReason, Browsers, fetchLatestBaileysVersion } from 'baileys';
+import { makeWASocket, DisconnectReason, Browsers, fetchLatestBaileysVersion, delay } from 'baileys';
 import { useMySQLAuthState, saveDeviceId, removeSession } from '../utils/dbAuthState.js';
 import { toDataURL } from 'qrcode';
 
@@ -101,6 +101,13 @@ export async function send_wa(deviceId, phoneNumber, message) {
 	}
 
 	try {
+		await client.presenceSubscribe(formatted)
+		await delay(500)
+
+		await client.sendPresenceUpdate('composing', formatted)
+		await delay(2000)
+
+		await client.sendPresenceUpdate('paused', formatted)
 		await client.sendMessage(formatted, { text: message });
 	} catch (error) {
 		if (error.output?.statusCode === 401 || error.output?.statusCode === 428) {
@@ -125,6 +132,54 @@ export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = ''
 		caption,
 		mimetype: 'image/jpeg',
 	});
+}
+
+/**
+ * Mengirim pesan dokumen dari URL ke WhatsApp menggunakan Baileys.
+ *
+ * @param {string} deviceId ID perangkat yang terdaftar di sesi.
+ * @param {string} phoneNumber Nomor telepon tujuan (atau JID).
+ * @param {string} fileUrl URL dokumen yang akan dikirim.
+ * @param {string} fileName Nama file yang akan ditampilkan di WhatsApp.
+ * @param {string} [caption=''] Teks keterangan/caption opsional untuk dokumen.
+ * @param {string} [mimetype=''] MIME type dokumen (misalnya 'application/pdf').
+ */
+export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileName, caption = '', mimetype = '') {
+	// Pastikan sessions sudah didefinisikan di lingkup Anda
+	// dan memiliki tipe seperti { [deviceId: string]: { client: WASocket } }
+	
+	// 1. Format nomor telepon menjadi JID WhatsApp
+	const formatted = phoneNumber.includes('@s.whatsapp.net') 
+		? phoneNumber 
+		: `${phoneNumber}@s.whatsapp.net`;
+
+	// 2. Periksa dan buat klien jika sesi belum ada (asumsi Anda memiliki createWhatsAppClient)
+	if (!sessions[deviceId]) {
+		await createWhatsAppClient(deviceId);
+	}
+
+	// 3. Dapatkan objek klien Baileys dari sesi
+	const client = sessions[deviceId]?.client;
+	if (!client) throw new Error(`Client untuk ${deviceId} tidak ditemukan.`);
+	
+	await client.presenceSubscribe(formatted)
+	await delay(500)
+
+	await client.sendPresenceUpdate('composing', formatted)
+	await delay(2000)
+
+	await client.sendPresenceUpdate('paused', formatted)
+
+	// 4. Kirim pesan dokumen menggunakan URL
+	await client.sendMessage(formatted, {
+		// Ubah properti 'document' menjadi objek dengan kunci 'url'
+		document: { url: fileUrl }, 
+		fileName: fileName,
+		caption: caption,
+		mimetype: mimetype || 'application/octet-stream',
+	});
+	
+	console.log(`Dokumen dari URL ${fileUrl} berhasil dikirim ke ${formatted}.`);
 }
 
 export async function getMyProfilePicture(deviceId, retries = 3) {
