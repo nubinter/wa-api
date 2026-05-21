@@ -11,20 +11,21 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@tinyhttp/app": "^3.0.1",
+    "@tinyhttp/app": "^3.0.7",
     "@tinyhttp/url": "^2.1.1",
-    "axios": "^1.12.2",
-    "baileys": "^6.7.21",
-    "dotenv": "^16.6.1",
-    "milliparsec": "^5.1.0",
+    "axios": "^1.16.1",
+    "baileys": "^6.7.22",
+    "dotenv": "^17.4.2",
+    "milliparsec": "^5.1.1",
     "mysql-baileys": "github:bobslavtriev/mysql-baileys",
-    "mysql2": "^3.13.0",
+    "mysql2": "^3.22.3",
     "qrcode": "^1.5.4",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "redis": "^5.12.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10",
+    "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

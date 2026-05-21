@@ -1,5 +1,5 @@
 const { makeWASocket, makeCacheableSignalKeyStore, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
-const { useMySQLAuthState } = require('../utils/dbAuthState');
+const { useRedisAuthState } = require('../utils/redisAuthState');
 const qrcode = require('qrcode-terminal');
 const { toDataURL } = require('qrcode');
 const sessions = {}; // Menyimpan semua sesi aktif
@@ -17,7 +17,7 @@ const createWhatsAppClient = async (deviceId) => {
     console.log(`Memulai koneksi untuk ${deviceId}`);
 
     // Baca auth state dari database
-    const { state, saveCreds } = await useMySQLAuthState(deviceId);
+    const { state, saveCreds } = await useRedisAuthState(deviceId);
 
     // Buat socket WhatsApp
     client = makeWASocket({

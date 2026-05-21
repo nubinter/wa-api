@@ -12,7 +12,7 @@ import {
   getMyProfilePicture,
   logoutDevice
 } from './services/whatsappService.js';
-import { getAllDeviceIds } from './utils/dbAuthState.js';
+import { getAllDeviceIds } from './utils/redisAuthState.js';
 
 dotenv.config();
 
@@ -121,8 +121,35 @@ app.post('/send-image', async (req, res) => {
     return res.status(400).json({ success: false, pesan: 'deviceId, phoneNumber, dan imageUrl diperlukan.' });
   }
 
+  // SSRF Protection: Validate URL and block private IP ranges / localhost
   try {
-    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const parsedUrl = new URL(imageUrl);
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return res.status(400).json({ success: false, pesan: 'Protokol URL tidak valid. Hanya HTTP dan HTTPS yang diizinkan.' });
+    }
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.16.') ||
+      hostname.startsWith('169.254.')
+    ) {
+      return res.status(400).json({ success: false, pesan: 'Akses ke alamat IP lokal/internal tidak diizinkan.' });
+    }
+  } catch (err) {
+    return res.status(400).json({ success: false, pesan: 'Format URL gambar tidak valid.' });
+  }
+
+  try {
+    // Fetch image safely: 10s timeout, max 10MB file size
+    const response = await axios.get(imageUrl, { 
+      responseType: 'arraybuffer',
+      timeout: 10000, 
+      maxContentLength: 10 * 1024 * 1024 
+    });
     const imageBuffer = Buffer.from(response.data, 'binary');
     await sendImage(deviceId, phoneNumber, imageBuffer, caption);
     res.status(200).json({ success: true, pesan: 'Gambar berhasil dikirim.' });
@@ -177,7 +204,9 @@ const initializeSessions = async () => {
   }
 };
 
-initializeSessions();
+initializeSessions().catch(err => {
+  console.error('Gagal menginisialisasi sesi WhatsApp pada startup:', err);
+});
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);

@@ -1,62 +1,104 @@
 import { makeWASocket, DisconnectReason, Browsers, fetchLatestBaileysVersion, delay } from 'baileys';
-import { useMySQLAuthState, saveDeviceId, removeSession } from '../utils/dbAuthState.js';
+import { useRedisAuthState, saveDeviceId, removeSession } from '../utils/redisAuthState.js';
 import { toDataURL } from 'qrcode';
 
 const sessions = {};
+let cachedBaileysVersion = null;
+
+// Cache the latest Baileys version to avoid redundant external HTTP requests
+async function getBaileysVersion() {
+	if (!cachedBaileysVersion) {
+		try {
+			const { version, isLatest } = await fetchLatestBaileysVersion();
+			cachedBaileysVersion = version;
+			console.log(`Menggunakan versi Baileys terbaru: ${version.join('.')}, isLatest: ${isLatest}`);
+		} catch (error) {
+			console.error('Gagal mengambil versi Baileys dari internet, menggunakan default [6, 7, 22]:', error);
+			cachedBaileysVersion = [6, 7, 22]; // Default fallback version
+		}
+	}
+	return cachedBaileysVersion;
+}
 
 export async function createWhatsAppClient(deviceId) {
-	const { state, saveCreds, removeCreds } = await useMySQLAuthState(deviceId);
+	// Prevent duplicate initialization race conditions
+	if (sessions[deviceId] && sessions[deviceId].status === 'initializing') {
+		console.log(`Client untuk ${deviceId} sedang diinisialisasi...`);
+		return sessions[deviceId].promise;
+	}
 
-	const { version, isLatest } = await fetchLatestBaileysVersion();
-	console.log(`Using Baileys version: ${version.join('.')}, isLatest: ${isLatest}`);
-
-	const client = makeWASocket({
-		version,
-		auth: state,
-		browser: Browsers.macOS('Desktop'),
+	let resolvePromise, rejectPromise;
+	const promise = new Promise((resolve, reject) => {
+		resolvePromise = resolve;
+		rejectPromise = reject;
 	});
 
-	sessions[deviceId] = { client, qrCode: null, qrResolver: null };
+	sessions[deviceId] = { status: 'initializing', promise };
 
-	client.ev.on('connection.update', async (update) => {
-		const { connection, lastDisconnect, qr } = update;
+	try {
+		const { state, saveCreds, removeCreds } = await useRedisAuthState(deviceId);
+		const version = await getBaileysVersion();
 
-		if (qr) {
-			sessions[deviceId].qrCode = await toDataURL(qr);
-			if (sessions[deviceId].qrResolver) {
-				sessions[deviceId].qrResolver(sessions[deviceId].qrCode);
-				sessions[deviceId].qrResolver = null;
+		const client = makeWASocket({
+			version,
+			auth: state,
+			browser: Browsers.macOS('Desktop'),
+		});
+
+		sessions[deviceId] = { 
+			client, 
+			qrCode: null, 
+			qrResolver: null, 
+			status: 'initialized',
+			promise: null 
+		};
+
+		client.ev.on('connection.update', async (update) => {
+			const { connection, lastDisconnect, qr } = update;
+
+			if (qr) {
+				sessions[deviceId].qrCode = await toDataURL(qr);
+				if (sessions[deviceId].qrResolver) {
+					sessions[deviceId].qrResolver(sessions[deviceId].qrCode);
+					sessions[deviceId].qrResolver = null;
+				}
 			}
-		}
 
-		if (connection === 'close') {
-			const code = lastDisconnect?.error?.output?.statusCode;
-			if (code === DisconnectReason.restartRequired || code === 428) {
-				console.log('Koneksi terhubung, perlu dilakukan restart.')
-				setTimeout(() => createWhatsAppClient(deviceId), 500);
-			} else if (code === 401) {
-				console.log('Error 401, Session akan dihapus dan dilogout')
-				console.log(lastDisconnect?.error?.output)
-				await removeCreds();
-				await removeSession(deviceId);
-				delete sessions[deviceId];
-			} else {
-				console.log('Gagal mengkoneksikan device '+deviceId)
-				console.log(lastDisconnect?.error?.output)
+			if (connection === 'close') {
+				const code = lastDisconnect?.error?.output?.statusCode;
+				if (code === DisconnectReason.restartRequired || code === 428) {
+					console.log(`Koneksi terhubung untuk ${deviceId}, perlu dilakukan restart.`);
+					setTimeout(() => createWhatsAppClient(deviceId), 500);
+				} else if (code === 401) {
+					console.log(`Error 401, Sesi ${deviceId} akan dihapus dan dilogout.`);
+					console.log(lastDisconnect?.error?.output);
+					await removeCreds();
+					await removeSession(deviceId);
+					delete sessions[deviceId];
+				} else {
+					console.log(`Gagal mengkoneksikan device ${deviceId}`);
+					console.log(lastDisconnect?.error?.output);
+				}
 			}
-		}
 
-		if (connection === 'open') {
-			sessions[deviceId].qrCode = null;
-			await saveDeviceId(deviceId);
-		}
-	});
+			if (connection === 'open') {
+				sessions[deviceId].qrCode = null;
+				await saveDeviceId(deviceId);
+			}
+		});
 
-	client.ev.on('creds.update', async () => {
-		await saveCreds();
-	});
+		client.ev.on('creds.update', async () => {
+			await saveCreds();
+		});
 
-	return client;
+		resolvePromise(client);
+		return client;
+	} catch (error) {
+		console.error(`Gagal membuat WhatsApp client untuk ${deviceId}:`, error);
+		delete sessions[deviceId];
+		rejectPromise(error);
+		throw error;
+	}
 }
 
 export function checkConnectionStatus(deviceId) {
@@ -82,32 +124,35 @@ export async function generateQRCode(deviceId) {
 export async function send_wa(deviceId, phoneNumber, message) {
 	const formatted = phoneNumber.includes('@s.whatsapp.net') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
 
-	if (!sessions[deviceId]) {
+	let session = sessions[deviceId];
+	if (!session) {
 		await createWhatsAppClient(deviceId);
+		session = sessions[deviceId];
 	}
 
-	const client = sessions[deviceId]?.client;
+	const client = session?.client;
 	if (!client) throw new Error(`Client untuk ${deviceId} tidak ditemukan.`);
 
+	// Wait up to 5 seconds if connection is currently being established
 	if (!client.user) {
-		await createWhatsAppClient(deviceId);
-		await new Promise((resolve, reject) => {
-			client.ev.on('connection.update', (update) => {
-				if (update.connection === 'open') resolve();
-				if (update.connection === 'close') reject(new Error('Connection closed'));
-				if (update.qr) reject(new Error('QR code expired'));
-			});
-		});
+		let retries = 0;
+		while (!client.user && retries < 10) {
+			await delay(500);
+			retries++;
+		}
+		if (!client.user) {
+			throw new Error(`Device ${deviceId} tidak aktif atau belum terhubung. Silakan pindai QR code terlebih dahulu.`);
+		}
 	}
 
 	try {
-		await client.presenceSubscribe(formatted)
-		await delay(500)
+		await client.presenceSubscribe(formatted);
+		await delay(500);
 
-		await client.sendPresenceUpdate('composing', formatted)
-		await delay(2000)
+		await client.sendPresenceUpdate('composing', formatted);
+		await delay(2000);
 
-		await client.sendPresenceUpdate('paused', formatted)
+		await client.sendPresenceUpdate('paused', formatted);
 		await client.sendMessage(formatted, { text: message });
 	} catch (error) {
 		if (error.output?.statusCode === 401 || error.output?.statusCode === 428) {
@@ -120,12 +165,25 @@ export async function send_wa(deviceId, phoneNumber, message) {
 export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = '') {
 	const formatted = phoneNumber.includes('@s.whatsapp.net') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
 
-	if (!sessions[deviceId]) {
+	let session = sessions[deviceId];
+	if (!session) {
 		await createWhatsAppClient(deviceId);
+		session = sessions[deviceId];
 	}
 
-	const client = sessions[deviceId]?.client;
+	const client = session?.client;
 	if (!client) throw new Error(`Client untuk ${deviceId} tidak ditemukan.`);
+
+	if (!client.user) {
+		let retries = 0;
+		while (!client.user && retries < 10) {
+			await delay(500);
+			retries++;
+		}
+		if (!client.user) {
+			throw new Error(`Device ${deviceId} tidak aktif atau belum terhubung. Silakan pindai QR code terlebih dahulu.`);
+		}
+	}
 
 	await client.sendMessage(formatted, {
 		image: imageBuffer,
@@ -134,45 +192,40 @@ export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = ''
 	});
 }
 
-/**
- * Mengirim pesan dokumen dari URL ke WhatsApp menggunakan Baileys.
- *
- * @param {string} deviceId ID perangkat yang terdaftar di sesi.
- * @param {string} phoneNumber Nomor telepon tujuan (atau JID).
- * @param {string} fileUrl URL dokumen yang akan dikirim.
- * @param {string} fileName Nama file yang akan ditampilkan di WhatsApp.
- * @param {string} [caption=''] Teks keterangan/caption opsional untuk dokumen.
- * @param {string} [mimetype=''] MIME type dokumen (misalnya 'application/pdf').
- */
 export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileName, caption = '', mimetype = '') {
-	// Pastikan sessions sudah didefinisikan di lingkup Anda
-	// dan memiliki tipe seperti { [deviceId: string]: { client: WASocket } }
-	
-	// 1. Format nomor telepon menjadi JID WhatsApp
 	const formatted = phoneNumber.includes('@s.whatsapp.net') 
 		? phoneNumber 
 		: `${phoneNumber}@s.whatsapp.net`;
 
-	// 2. Periksa dan buat klien jika sesi belum ada (asumsi Anda memiliki createWhatsAppClient)
-	if (!sessions[deviceId]) {
+	let session = sessions[deviceId];
+	if (!session) {
 		await createWhatsAppClient(deviceId);
+		session = sessions[deviceId];
 	}
 
-	// 3. Dapatkan objek klien Baileys dari sesi
-	const client = sessions[deviceId]?.client;
+	const client = session?.client;
 	if (!client) throw new Error(`Client untuk ${deviceId} tidak ditemukan.`);
 	
-	await client.presenceSubscribe(formatted)
-	await delay(500)
+	if (!client.user) {
+		let retries = 0;
+		while (!client.user && retries < 10) {
+			await delay(500);
+			retries++;
+		}
+		if (!client.user) {
+			throw new Error(`Device ${deviceId} tidak aktif atau belum terhubung. Silakan pindai QR code terlebih dahulu.`);
+		}
+	}
 
-	await client.sendPresenceUpdate('composing', formatted)
-	await delay(2000)
+	await client.presenceSubscribe(formatted);
+	await delay(500);
 
-	await client.sendPresenceUpdate('paused', formatted)
+	await client.sendPresenceUpdate('composing', formatted);
+	await delay(2000);
 
-	// 4. Kirim pesan dokumen menggunakan URL
+	await client.sendPresenceUpdate('paused', formatted);
+
 	await client.sendMessage(formatted, {
-		// Ubah properti 'document' menjadi objek dengan kunci 'url'
 		document: { url: fileUrl }, 
 		fileName: fileName,
 		caption: caption,
@@ -183,12 +236,23 @@ export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileNa
 }
 
 export async function getMyProfilePicture(deviceId, retries = 3) {
-	if (!sessions[deviceId]?.client) {
+	let session = sessions[deviceId];
+	if (!session) {
 		await createWhatsAppClient(deviceId);
+		session = sessions[deviceId];
 	}
 
-	const client = sessions[deviceId]?.client;
-	if (!client || !client.user) throw new Error('Client belum terhubung.');
+	const client = session?.client;
+	if (!client) throw new Error('Client belum terhubung.');
+
+	if (!client.user) {
+		let checkRetries = 0;
+		while (!client.user && checkRetries < 10) {
+			await delay(500);
+			checkRetries++;
+		}
+		if (!client.user) throw new Error('Client belum terhubung.');
+	}
 
 	try {
 		return await Promise.race([
@@ -217,13 +281,13 @@ export function getConnectionStatus(deviceId) {
 	return { status: 'connected', connected: true };
 }
 
-
 export async function logoutDevice(deviceId) {
-	if (!sessions[deviceId]) {
+	const session = sessions[deviceId];
+	if (!session || !session.client) {
 		throw new Error(`Device ${deviceId} tidak ditemukan.`);
 	}
 
-	const client = sessions[deviceId].client;
+	const client = session.client;
 	await client.logout();
 	client.ws.close();
 	await removeSession(deviceId);
