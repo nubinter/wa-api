@@ -1,6 +1,7 @@
 import { makeWASocket, DisconnectReason, Browsers, fetchLatestBaileysVersion, delay } from 'baileys';
 import { useRedisAuthState, saveDeviceId, removeSession } from '../utils/redisAuthState.js';
 import { toDataURL } from 'qrcode';
+import { sendWebhook } from '../utils/webhook.js';
 
 const sessions = {};
 let cachedBaileysVersion = null;
@@ -75,20 +76,43 @@ export async function createWhatsAppClient(deviceId) {
 					await removeCreds();
 					await removeSession(deviceId);
 					delete sessions[deviceId];
+					sendWebhook(deviceId, 'device.disconnected', { reason: 'logged_out', code });
 				} else {
 					console.log(`Gagal mengkoneksikan device ${deviceId}`);
 					console.log(lastDisconnect?.error?.output);
+					sendWebhook(deviceId, 'device.disconnected', { reason: 'connection_failed', code });
 				}
 			}
 
 			if (connection === 'open') {
 				sessions[deviceId].qrCode = null;
 				await saveDeviceId(deviceId);
+				sendWebhook(deviceId, 'device.connected');
 			}
 		});
 
 		client.ev.on('creds.update', async () => {
 			await saveCreds();
+		});
+
+		client.ev.on('messages.upsert', async ({ messages, type }) => {
+			if (type === 'notify') {
+				for (const msg of messages) {
+					if (!msg.key.fromMe && msg.message) {
+						const messageType = Object.keys(msg.message)[0];
+						const textContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+						
+						sendWebhook(deviceId, 'message.received', {
+							from: msg.key.remoteJid,
+							participant: msg.key.participant || null,
+							pushName: msg.pushName,
+							messageType: messageType,
+							text: textContent,
+							rawMessage: msg
+						});
+					}
+				}
+			}
 		});
 
 		resolvePromise(client);
