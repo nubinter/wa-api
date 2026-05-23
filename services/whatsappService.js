@@ -146,7 +146,9 @@ export async function generateQRCode(deviceId) {
 }
 
 export async function send_wa(deviceId, phoneNumber, message) {
-	const formatted = phoneNumber.includes('@s.whatsapp.net') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+	const formatted = phoneNumber.includes('@s.whatsapp.net') || phoneNumber.includes('@g.us') || phoneNumber.includes('@lid') 
+		? phoneNumber 
+		: `${phoneNumber}@s.whatsapp.net`;
 
 	let session = sessions[deviceId];
 	if (!session) {
@@ -187,7 +189,9 @@ export async function send_wa(deviceId, phoneNumber, message) {
 }
 
 export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = '') {
-	const formatted = phoneNumber.includes('@s.whatsapp.net') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+	const formatted = phoneNumber.includes('@s.whatsapp.net') || phoneNumber.includes('@g.us') || phoneNumber.includes('@lid') 
+		? phoneNumber 
+		: `${phoneNumber}@s.whatsapp.net`;
 
 	let session = sessions[deviceId];
 	if (!session) {
@@ -217,7 +221,7 @@ export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = ''
 }
 
 export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileName, caption = '', mimetype = '') {
-	const formatted = phoneNumber.includes('@s.whatsapp.net') 
+	const formatted = phoneNumber.includes('@s.whatsapp.net') || phoneNumber.includes('@g.us') || phoneNumber.includes('@lid') 
 		? phoneNumber 
 		: `${phoneNumber}@s.whatsapp.net`;
 
