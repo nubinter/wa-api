@@ -80,12 +80,12 @@ export const useRedisAuthState = async (deviceId) => {
 };
 
 export const saveDeviceId = async (deviceId) => {
-    await redisClient.sAdd('wa-sessions', deviceId);
+    await redisClient.sAdd('wa-sessions', String(deviceId));
 };
 
 export const removeSession = async (deviceId) => {
     // Hapus dari daftar sesi
-    await redisClient.sRem('wa-sessions', deviceId);
+    await redisClient.sRem('wa-sessions', String(deviceId));
     
     // Pindai dan hapus semua kunci yang berkaitan dengan deviceId ini
     let cursor = 0;
