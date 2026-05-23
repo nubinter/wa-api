@@ -21,6 +21,16 @@ async function getBaileysVersion() {
 	return cachedBaileysVersion;
 }
 
+async function verifyIsOnWhatsApp(client, jid) {
+	// Only verify standard personal numbers
+	if (jid.includes('@s.whatsapp.net')) {
+		const [result] = await client.onWhatsApp(jid);
+		if (!result || !result.exists) {
+			throw new Error(`Nomor telepon tidak terdaftar di WhatsApp.`);
+		}
+	}
+}
+
 export async function createWhatsAppClient(deviceId) {
 	// Prevent duplicate initialization race conditions
 	if (sessions[deviceId] && sessions[deviceId].status === 'initializing') {
@@ -172,6 +182,8 @@ export async function send_wa(deviceId, phoneNumber, message) {
 	}
 
 	try {
+		await verifyIsOnWhatsApp(client, formatted);
+
 		await client.presenceSubscribe(formatted);
 		await delay(500);
 
@@ -213,6 +225,8 @@ export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = ''
 		}
 	}
 
+	await verifyIsOnWhatsApp(client, formatted);
+
 	await client.sendMessage(formatted, {
 		image: imageBuffer,
 		caption,
@@ -244,6 +258,8 @@ export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileNa
 			throw new Error(`Device ${deviceId} tidak aktif atau belum terhubung. Silakan pindai QR code terlebih dahulu.`);
 		}
 	}
+
+	await verifyIsOnWhatsApp(client, formatted);
 
 	await client.presenceSubscribe(formatted);
 	await delay(500);
