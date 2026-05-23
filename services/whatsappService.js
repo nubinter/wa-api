@@ -208,6 +208,7 @@ export async function send_wa(deviceId, phoneNumber, message) {
 
 		await client.sendPresenceUpdate('paused', formatted);
 		await client.sendMessage(formatted, { text: message });
+		console.log(`[${new Date().toISOString()}] Pesan teks terkirim ke ${formatted} via device ${deviceId}`);
 	} catch (error) {
 		if (error.output?.statusCode === 401 || error.output?.statusCode === 428) {
 			await createWhatsAppClient(deviceId);
@@ -248,6 +249,7 @@ export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = ''
 		caption,
 		mimetype: 'image/jpeg',
 	});
+	console.log(`[${new Date().toISOString()}] Pesan gambar terkirim ke ${formatted} via device ${deviceId}`);
 }
 
 export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileName, caption = '', mimetype = '') {
@@ -292,7 +294,7 @@ export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileNa
 		mimetype: mimetype || 'application/octet-stream',
 	});
 	
-	console.log(`Dokumen dari URL ${fileUrl} berhasil dikirim ke ${formatted}.`);
+	console.log(`[${new Date().toISOString()}] Dokumen dari URL ${fileUrl} berhasil dikirim ke ${formatted} via device ${deviceId}.`);
 }
 
 export async function getMyProfilePicture(deviceId, retries = 3) {
