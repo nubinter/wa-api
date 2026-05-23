@@ -55,6 +55,9 @@ export async function createWhatsAppClient(deviceId) {
 			version,
 			auth: state,
 			browser: Browsers.macOS('Desktop'),
+			syncFullHistory: false,
+			markOnlineOnConnect: true,
+			generateHighQualityLinkPreview: false
 		});
 
 		client = readReceiptVariance({ meanMs: 1500, stdDevMs: 800 }).wrap(client);
