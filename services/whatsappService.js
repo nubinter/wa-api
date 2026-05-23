@@ -2,6 +2,7 @@ import { makeWASocket, DisconnectReason, Browsers, fetchLatestBaileysVersion, de
 import { useRedisAuthState, saveDeviceId, removeSession } from '../utils/redisAuthState.js';
 import { toDataURL } from 'qrcode';
 import { sendWebhook } from '../utils/webhook.js';
+import { wrapSocket, readReceiptVariance } from 'baileys-antiban';
 
 const sessions = {};
 let cachedBaileysVersion = null;
@@ -50,10 +51,17 @@ export async function createWhatsAppClient(deviceId) {
 		const { state, saveCreds, removeCreds } = await useRedisAuthState(deviceId);
 		const version = await getBaileysVersion();
 
-		const client = makeWASocket({
+		let client = makeWASocket({
 			version,
 			auth: state,
 			browser: Browsers.macOS('Desktop'),
+		});
+
+		client = readReceiptVariance({ meanMs: 1500, stdDevMs: 800 }).wrap(client);
+		client = wrapSocket(client, {
+			preset: 'moderate',
+			warmupDays: 7,
+			logging: true
 		});
 
 		sessions[deviceId] = { 
