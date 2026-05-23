@@ -63,7 +63,7 @@ export async function createWhatsAppClient(deviceId) {
 		client = readReceiptVariance({ meanMs: 1500, stdDevMs: 800 }).wrap(client);
 		client = wrapSocket(client, {
 			preset: 'moderate',
-			warmupDays: 7,
+			warmupDays: 0, // Dimatikan agar tidak melimit 20 pesan per hari (karena nomor mungkin sudah aktif lama)
 			logging: true
 		});
 
