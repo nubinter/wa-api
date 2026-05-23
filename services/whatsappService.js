@@ -109,6 +109,13 @@ export async function createWhatsAppClient(deviceId) {
 			if (type === 'notify') {
 				for (const msg of messages) {
 					if (!msg.key.fromMe && msg.message) {
+						// Tandai pesan sudah dibaca
+						try {
+							await client.readMessages([msg.key]);
+						} catch (err) {
+							console.log('Gagal mengirim read receipt:', err.message);
+						}
+
 						const messageType = Object.keys(msg.message)[0];
 						const textContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 						
@@ -188,7 +195,8 @@ export async function send_wa(deviceId, phoneNumber, message) {
 		await delay(500);
 
 		await client.sendPresenceUpdate('composing', formatted);
-		await delay(2000);
+		const typingTime = Math.min((message?.length || 10) * 50, 6000);
+		await delay(typingTime);
 
 		await client.sendPresenceUpdate('paused', formatted);
 		await client.sendMessage(formatted, { text: message });
