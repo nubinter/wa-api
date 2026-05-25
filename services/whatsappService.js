@@ -120,6 +120,9 @@ export async function createWhatsAppClient(deviceId) {
 			if (type === 'notify') {
 				for (const msg of messages) {
 					if (!msg.key.fromMe && msg.message) {
+						// Abaikan pesan status/story atau broadcast lainnya
+						if (msg.key.remoteJid?.includes('@broadcast')) continue;
+
 						// Tandai pesan sudah dibaca
 						try {
 							await client.readMessages([msg.key]);
