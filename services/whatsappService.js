@@ -227,7 +227,18 @@ export async function send_wa(deviceId, phoneNumber, message, quotedMessage = nu
 		await client.sendPresenceUpdate('paused', formatted);
 		
 		const sendOptions = { text: message };
-		const extraOptions = quotedMessage ? { quoted: quotedMessage } : {};
+		let extraOptions = {};
+		if (quotedMessage && quotedMessage.key && quotedMessage.message) {
+			// Sanitize message to prevent Base64 string vs Buffer protobuf crashes
+			const cleanMessage = { ...quotedMessage.message };
+			delete cleanMessage.messageContextInfo;
+			
+			const cleanQuoted = {
+				key: quotedMessage.key,
+				message: cleanMessage
+			};
+			extraOptions = { quoted: cleanQuoted };
+		}
 		await client.sendMessage(formatted, sendOptions, extraOptions);
 	} catch (error) {
 		if (error.output?.statusCode === 401 || error.output?.statusCode === 428) {
