@@ -19,7 +19,7 @@ dotenv.config();
 const app = new App();
 const port = parseInt(process.env.PORT || '3000');
 
-app.use(json());
+app.use(json({ payloadLimit: 50 * 1024 * 1024 })); // 50MB limit
 
 /*app.get('/get-qr', async (req, res) => {
   const { deviceId } = req.query;
