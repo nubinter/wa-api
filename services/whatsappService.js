@@ -122,7 +122,12 @@ export async function createWhatsAppClient(deviceId) {
 
 						// Cek apakah pesan dari grup
 						if (msg.key.remoteJid?.endsWith('@g.us')) {
-							const botJid = client.user?.id ? client.user.id.split(':')[0] + '@s.whatsapp.net' : '';
+							let botJid = '';
+							if (client.user?.id) {
+								const rawId = client.user.id.split(':')[0].split('@')[0];
+								botJid = rawId + '@s.whatsapp.net';
+							}
+							
 							const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 							const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant || '';
 							
