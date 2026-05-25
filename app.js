@@ -58,13 +58,13 @@ app.get('/get-qr', async (req, res) => {
 
 app.post('/send-message', async (req, res) => {
   console.log(req.body)
-  const { deviceId, phoneNumber, message } = req.body;
+  const { deviceId, phoneNumber, message, quotedMessage } = req.body;
   if (!deviceId || !phoneNumber || !message) {
     return res.status(400).json({ success: false, pesan: 'deviceId, phoneNumber, and message are required' });
   }
 
   try {
-    await send_wa(deviceId, phoneNumber, message);
+    await send_wa(deviceId, phoneNumber, message, quotedMessage);
     res.status(200).json({ success: true, pesan: 'Pesan berhasil dikirim' });
   } catch (error) {
     res.status(500).json({ success: false, pesan: error.message });
@@ -76,7 +76,6 @@ app.post('/send-message', async (req, res) => {
  * Route: /send-document-url
  */
 app.post('/send-document-url', async (req, res) => {
-	console.log('Request Body:', req.body);
 	
 	// Mendestrukturisasi data yang dibutuhkan dari body request
 	// tinyhttp akan menyediakan req.body setelah middleware json() dipanggil
@@ -196,10 +195,8 @@ app.post('/logout', async (req, res) => {
 
 
 const initializeSessions = async () => {
-  console.log('Memuat semua sesi WhatsApp yang tersimpan...');
   const deviceIds = await getAllDeviceIds();
   for (const deviceId of deviceIds) {
-    console.log(`Menghubungkan ulang ${deviceId}...`);
     await createWhatsAppClient(deviceId);
   }
 };
@@ -209,5 +206,4 @@ initializeSessions().catch(err => {
 });
 
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
 });

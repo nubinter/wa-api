@@ -13,7 +13,6 @@ async function getBaileysVersion() {
 		try {
 			const { version, isLatest } = await fetchLatestBaileysVersion();
 			cachedBaileysVersion = version;
-			console.log(`Menggunakan versi Baileys terbaru: ${version.join('.')}, isLatest: ${isLatest}`);
 		} catch (error) {
 			console.error('Gagal mengambil versi Baileys dari internet, menggunakan default [6, 7, 22]:', error);
 			cachedBaileysVersion = [6, 7, 22]; // Default fallback version
@@ -35,7 +34,6 @@ async function verifyIsOnWhatsApp(client, jid) {
 export async function createWhatsAppClient(deviceId) {
 	// Prevent duplicate initialization race conditions
 	if (sessions[deviceId] && sessions[deviceId].status === 'initializing') {
-		console.log(`Client untuk ${deviceId} sedang diinisialisasi...`);
 		return sessions[deviceId].promise;
 	}
 
@@ -89,18 +87,17 @@ export async function createWhatsAppClient(deviceId) {
 			if (connection === 'close') {
 				const code = lastDisconnect?.error?.output?.statusCode;
 				if (code === DisconnectReason.restartRequired || code === 428) {
-					console.log(`Koneksi terhubung untuk ${deviceId}, perlu dilakukan restart.`);
 					setTimeout(() => createWhatsAppClient(deviceId), 500);
 				} else if (code === 401) {
-					console.log(`Error 401, Sesi ${deviceId} akan dihapus dan dilogout.`);
-					console.log(lastDisconnect?.error?.output);
+					console.error(`Error 401, Sesi ${deviceId} akan dihapus dan dilogout.`);
+					console.error(lastDisconnect?.error?.output);
 					await removeCreds();
 					await removeSession(deviceId);
 					delete sessions[deviceId];
 					sendWebhook(deviceId, 'device.disconnected', { reason: 'logged_out', code });
 				} else {
-					console.log(`Gagal mengkoneksikan device ${deviceId}`);
-					console.log(lastDisconnect?.error?.output);
+					console.error(`Gagal mengkoneksikan device ${deviceId}`);
+					console.error(lastDisconnect?.error?.output);
 					sendWebhook(deviceId, 'device.disconnected', { reason: 'connection_failed', code });
 				}
 			}
@@ -123,11 +120,26 @@ export async function createWhatsAppClient(deviceId) {
 						// Abaikan pesan status/story atau broadcast lainnya
 						if (msg.key.remoteJid?.includes('@broadcast')) continue;
 
+						// Cek apakah pesan dari grup
+						if (msg.key.remoteJid?.endsWith('@g.us')) {
+							const botJid = client.user?.id ? client.user.id.split(':')[0] + '@s.whatsapp.net' : '';
+							const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+							const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant || '';
+							
+							const isMentioned = botJid && mentionedJid.includes(botJid);
+							const isQuotingBot = botJid && quotedParticipant === botJid;
+							
+							// Abaikan pesan grup jika bot tidak di-mention dan pesannya tidak di-reply
+							if (!isMentioned && !isQuotingBot) {
+								continue;
+							}
+						}
+
 						// Tandai pesan sudah dibaca
 						try {
 							await client.readMessages([msg.key]);
 						} catch (err) {
-							console.log('Gagal mengirim read receipt:', err.message);
+							console.error('Gagal mengirim read receipt:', err.message);
 						}
 
 						const messageType = Object.keys(msg.message)[0];
@@ -176,7 +188,7 @@ export async function generateQRCode(deviceId) {
 	});
 }
 
-export async function send_wa(deviceId, phoneNumber, message) {
+export async function send_wa(deviceId, phoneNumber, message, quotedMessage = null) {
 	const formatted = phoneNumber.includes('@s.whatsapp.net') || phoneNumber.includes('@g.us') || phoneNumber.includes('@lid') 
 		? phoneNumber 
 		: `${phoneNumber}@s.whatsapp.net`;
@@ -213,8 +225,10 @@ export async function send_wa(deviceId, phoneNumber, message) {
 		await delay(typingTime);
 
 		await client.sendPresenceUpdate('paused', formatted);
-		await client.sendMessage(formatted, { text: message });
-		console.log(`[${new Date().toISOString()}] Pesan teks terkirim ke ${formatted} via device ${deviceId}`);
+		
+		const sendOptions = { text: message };
+		const extraOptions = quotedMessage ? { quoted: quotedMessage } : {};
+		await client.sendMessage(formatted, sendOptions, extraOptions);
 	} catch (error) {
 		if (error.output?.statusCode === 401 || error.output?.statusCode === 428) {
 			await createWhatsAppClient(deviceId);
@@ -255,7 +269,6 @@ export async function sendImage(deviceId, phoneNumber, imageBuffer, caption = ''
 		caption,
 		mimetype: 'image/jpeg',
 	});
-	console.log(`[${new Date().toISOString()}] Pesan gambar terkirim ke ${formatted} via device ${deviceId}`);
 }
 
 export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileName, caption = '', mimetype = '') {
@@ -299,8 +312,6 @@ export async function sendDocumentFromUrl(deviceId, phoneNumber, fileUrl, fileNa
 		caption: caption,
 		mimetype: mimetype || 'application/octet-stream',
 	});
-	
-	console.log(`[${new Date().toISOString()}] Dokumen dari URL ${fileUrl} berhasil dikirim ke ${formatted} via device ${deviceId}.`);
 }
 
 export async function getMyProfilePicture(deviceId, retries = 3) {
