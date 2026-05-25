@@ -122,17 +122,15 @@ export async function createWhatsAppClient(deviceId) {
 
 						// Cek apakah pesan dari grup
 						if (msg.key.remoteJid?.endsWith('@g.us')) {
-							let botJid = '';
-							if (client.user?.id) {
-								const rawId = client.user.id.split(':')[0].split('@')[0];
-								botJid = rawId + '@s.whatsapp.net';
-							}
+							let botIds = [];
+							if (client.user?.id) botIds.push(client.user.id.split(':')[0].split('@')[0]);
+							if (client.user?.lid) botIds.push(client.user.lid.split(':')[0].split('@')[0]);
 							
 							const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 							const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant || '';
 							
-							const isMentioned = botJid && mentionedJid.includes(botJid);
-							const isQuotingBot = botJid && quotedParticipant === botJid;
+							const isMentioned = mentionedJid.some(jid => botIds.some(id => jid.startsWith(id + '@')));
+							const isQuotingBot = botIds.some(id => quotedParticipant.startsWith(id + '@'));
 							
 							// Abaikan pesan grup jika bot tidak di-mention dan pesannya tidak di-reply
 							if (!isMentioned && !isQuotingBot) {
