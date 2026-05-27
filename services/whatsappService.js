@@ -376,13 +376,19 @@ export function getConnectionStatus(deviceId) {
 
 export async function logoutDevice(deviceId) {
 	const session = sessions[deviceId];
-	if (!session || !session.client) {
-		throw new Error(`Device ${deviceId} tidak ditemukan.`);
+
+	if (session && session.client) {
+		try {
+			await session.client.logout();
+		} catch (error) {
+			console.log(`Peringatan: Gagal logout dari WhatsApp server (${error.message}). Melanjutkan penghapusan sesi lokal...`);
+		}
+		
+		try {
+			session.client.ws.close();
+		} catch (error) {}
 	}
 
-	const client = session.client;
-	await client.logout();
-	client.ws.close();
 	await removeSession(deviceId);
 	delete sessions[deviceId];
 }
