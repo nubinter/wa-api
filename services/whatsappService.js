@@ -86,9 +86,9 @@ export async function createWhatsAppClient(deviceId) {
 
 			if (connection === 'close') {
 				const code = lastDisconnect?.error?.output?.statusCode;
-				if (code === DisconnectReason.restartRequired || code === 428) {
-					setTimeout(() => createWhatsAppClient(deviceId), 500);
-				} else if (code === 401) {
+				
+				// Jangan reconnect jika 401 (Logged Out)
+				if (code === DisconnectReason.loggedOut || code === 401) {
 					console.error(`Error 401, Sesi ${deviceId} akan dihapus dan dilogout.`);
 					console.error(lastDisconnect?.error?.output);
 					await removeCreds();
@@ -96,9 +96,14 @@ export async function createWhatsAppClient(deviceId) {
 					delete sessions[deviceId];
 					sendWebhook(deviceId, 'device.disconnected', { reason: 'logged_out', code });
 				} else {
-					console.error(`Gagal mengkoneksikan device ${deviceId}`);
+					// Semua jenis diskonek lainnya (503, 408, 428, 515, dll) harus coba reconnect
+					console.error(`Koneksi terputus untuk device ${deviceId} (Code: ${code}). Mencoba menyambung kembali...`);
 					console.error(lastDisconnect?.error?.output);
-					sendWebhook(deviceId, 'device.disconnected', { reason: 'connection_failed', code });
+					sendWebhook(deviceId, 'device.disconnected', { reason: 'connection_lost_retrying', code });
+					
+					// Jeda 5 detik jika error dari server WhatsApp (503) atau Timeout (408) agar tidak spam
+					const delayMs = (code === 503 || code === 408) ? 5000 : 1000;
+					setTimeout(() => createWhatsAppClient(deviceId), delayMs);
 				}
 			}
 
