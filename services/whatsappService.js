@@ -379,6 +379,35 @@ export function getConnectionStatus(deviceId) {
 	return { status: 'connected', connected: true };
 }
 
+export async function getGroups(deviceId) {
+	let session = sessions[deviceId];
+	if (!session) {
+		await createWhatsAppClient(deviceId);
+		session = sessions[deviceId];
+	}
+
+	const client = session?.client;
+	if (!client) throw new Error('Client belum terhubung.');
+
+	if (!client.user) {
+		let checkRetries = 0;
+		while (!client.user && checkRetries < 10) {
+			await delay(500);
+			checkRetries++;
+		}
+		if (!client.user) throw new Error('Client belum terhubung.');
+	}
+
+	const groups = await client.groupFetchAllParticipating();
+	const groupList = Object.values(groups).map(group => ({
+		id: group.id,
+		subject: group.subject,
+		participantsCount: group.participants.length
+	}));
+
+	return groupList;
+}
+
 export async function logoutDevice(deviceId) {
 	const session = sessions[deviceId];
 

@@ -10,6 +10,7 @@ import {
   sendDocumentFromUrl,
   sendImage,
   getMyProfilePicture,
+  getGroups,
   logoutDevice
 } from './services/whatsappService.js';
 import { getAllDeviceIds } from './utils/redisAuthState.js';
@@ -176,6 +177,18 @@ app.get('/my-profile-picture', async (req, res) => {
   try {
     const profilePictureUrl = await getMyProfilePicture(deviceId);
     res.status(200).json({ success: true, picture_url: profilePictureUrl });
+  } catch (error) {
+    res.status(500).json({ success: false, pesan: error.message });
+  }
+});
+
+app.get('/groups', async (req, res) => {
+  const { deviceId } = req.query;
+  if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+
+  try {
+    const groups = await getGroups(deviceId);
+    res.status(200).json({ success: true, groups });
   } catch (error) {
     res.status(500).json({ success: false, pesan: error.message });
   }
